@@ -7,10 +7,12 @@ from .routers import auth, users, restaurants, reviews, favourites, ai_assistant
 
 app = FastAPI(title="Yelp Prototype API")
 
+# serve uploaded images (profile pics, restaurant photos)
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+# allow frontend to talk to backend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3006"],
@@ -21,6 +23,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
+    # create tables if they dont exist yet
     Base.metadata.create_all(bind=engine)
 
 app.include_router(auth.router)
