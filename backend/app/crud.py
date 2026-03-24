@@ -9,6 +9,7 @@ from .auth import hash_password
 # ─── Users ───────────────────────────────────────────────────────────
 
 def create_user(db: Session, payload: schemas.UserSignup):
+    # hash the password before storing
     new_user = models.User(
         name=payload.name,
         email=payload.email,
@@ -104,6 +105,7 @@ def create_restaurant(db: Session, payload: schemas.RestaurantCreate, user_id: i
 
 def list_restaurants(db: Session, skip: int, limit: int, name: str = None,
                      cuisine: str = None, city: str = None, keyword: str = None):
+    # build query with optional filters
     query = select(models.Restaurant)
 
     if name:
@@ -140,7 +142,7 @@ def update_restaurant(db: Session, restaurant_id: int, payload: schemas.Restaura
     if not restaurant:
         raise HTTPException(404, "Restaurant not found")
 
-    # Only the owner or the person who created it can edit
+    # only owner or creator can edit
     if restaurant.owner_id != user.id and restaurant.created_by != user.id:
         raise HTTPException(403, "Not authorized to update this restaurant")
 
@@ -180,7 +182,7 @@ def delete_restaurant(db: Session, restaurant_id: int, user: models.User):
 
 
 def _attach_review_stats(db: Session, restaurant: models.Restaurant):
-    """Compute and attach avg_rating and review_count to a restaurant object."""
+    # calculate avg rating and review count for a restaurant
     stats = db.execute(
         select(func.avg(models.Review.rating), func.count(models.Review.id))
         .where(models.Review.restaurant_id == restaurant.id)
@@ -210,6 +212,7 @@ def create_review(db: Session, restaurant_id: int, payload: schemas.ReviewCreate
 
 
 def list_reviews(db: Session, restaurant_id: int):
+    # get all reviews sorted by newest first
     reviews = db.scalars(
         select(models.Review)
         .where(models.Review.restaurant_id == restaurant_id)
@@ -300,7 +303,7 @@ def remove_favourite(db: Session, user_id: int, restaurant_id: int):
 # ─── User History ────────────────────────────────────────────────────
 
 def get_user_history(db: Session, user_id: int):
-    # Get all reviews by this user
+    # pull reviews and restaurants the user has added
     reviews = db.scalars(
         select(models.Review)
         .where(models.Review.user_id == user_id)
@@ -309,7 +312,7 @@ def get_user_history(db: Session, user_id: int):
     for review in reviews:
         review.user_name = review.user.name
 
-    # Get all restaurants this user created
+    # also get restaurants this user created
     restaurants_added = db.scalars(
         select(models.Restaurant)
         .where(models.Restaurant.created_by == user_id)
