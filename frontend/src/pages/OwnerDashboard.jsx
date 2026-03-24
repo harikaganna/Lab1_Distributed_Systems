@@ -8,6 +8,7 @@ export default function OwnerDashboard() {
   const [restaurants, setRestaurants] = useState([]);
   const [selectedReviews, setSelectedReviews] = useState(null);
   const [selectedName, setSelectedName] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [claimId, setClaimId] = useState("");
   const [msg, setMsg] = useState("");
@@ -47,9 +48,14 @@ export default function OwnerDashboard() {
   };
 
   const viewReviews = async (id, name) => {
-    const res = await api.get(`/restaurants/${id}/reviews`);
-    setSelectedReviews(res.data);
-    setSelectedName(name);
+    try {
+      const res = await api.get(`/restaurants/${id}/reviews`);
+      setSelectedReviews(res.data);
+      setSelectedName(name);
+      setSelectedId(id);
+    } catch (err) {
+      setMsg(err.response?.data?.detail || "Error loading reviews");
+    }
   };
 
   const claimRestaurant = async () => {
@@ -195,48 +201,53 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
-      {/* Owned restaurants */}
+      {/* Owned restaurants + Reviews side by side */}
       <h5>My Restaurants ({restaurants.length})</h5>
-      {restaurants.map((r) => (
-        <div key={r.id} className="card card-clean mb-2">
-          <div className="card-body py-2 d-flex justify-content-between align-items-center">
-            <div>
-              <Link to={`/restaurants/${r.id}`} style={{ color: "var(--brand)", textDecoration: "none" }}>
-                {r.name}
-              </Link>
-              <span className="ms-2 small text-muted">
-                {r.avg_rating ? `${r.avg_rating} ★` : "No ratings"} · {r.review_count} reviews
-              </span>
-            </div>
-            <div>
-              <button className="btn btn-sm btn-soft me-1" onClick={() => viewReviews(r.id, r.name)}>View Reviews</button>
-              <Link to={`/restaurants/${r.id}/edit`} className="btn btn-sm btn-soft">Edit</Link>
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {/* Reviews panel */}
-      {selectedReviews && (
-        <div className="card card-clean mt-4">
-          <div className="card-header d-flex justify-content-between">
-            <strong>Reviews for {selectedName}</strong>
-            <button className="btn btn-sm btn-soft" onClick={() => setSelectedReviews(null)}>Close</button>
-          </div>
-          <div className="card-body">
-            {selectedReviews.length === 0 ? <p className="text-muted">No reviews yet.</p> : (
-              selectedReviews.map((r) => (
-                <div key={r.id} className="mb-2 pb-2 border-bottom">
-                  <strong>{r.user_name || "User"}</strong>
-                  <span className="ms-2 badge badge-soft">{r.rating} ★</span>
-                  <span className="ms-2 small text-muted">{new Date(r.created_at).toLocaleDateString()}</span>
-                  {r.comment && <p className="mb-0 mt-1 small">{r.comment}</p>}
+      <div className="row">
+        <div className={selectedReviews ? "col-md-6" : "col-12"}>
+          {restaurants.map((r) => (
+            <div key={r.id} className="card card-clean mb-2" style={selectedId === r.id ? { borderColor: "var(--brand)" } : {}}>
+              <div className="card-body py-2 d-flex justify-content-between align-items-center">
+                <div>
+                  <Link to={`/restaurants/${r.id}`} style={{ color: "var(--brand)", textDecoration: "none" }}>
+                    {r.name}
+                  </Link>
+                  <span className="ms-2 small text-muted">
+                    {r.avg_rating ? `${r.avg_rating} ★` : "No ratings"} · {r.review_count} reviews
+                  </span>
                 </div>
-              ))
-            )}
-          </div>
+                <div>
+                  <button className="btn btn-sm btn-soft me-1" onClick={() => viewReviews(r.id, r.name)}>View Reviews</button>
+                  <Link to={`/restaurants/${r.id}/edit`} className="btn btn-sm btn-soft">Edit</Link>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+
+        {selectedReviews && (
+          <div className="col-md-6">
+            <div className="card card-clean" style={{ position: "sticky", top: 20 }}>
+              <div className="card-header d-flex justify-content-between">
+                <strong>Reviews for {selectedName}</strong>
+                <button className="btn btn-sm btn-soft" onClick={() => { setSelectedReviews(null); setSelectedId(null); }}>Close</button>
+              </div>
+              <div className="card-body" style={{ maxHeight: 500, overflowY: "auto" }}>
+                {selectedReviews.length === 0 ? <p className="text-muted">No reviews yet.</p> : (
+                  selectedReviews.map((r) => (
+                    <div key={r.id} className="mb-2 pb-2 border-bottom">
+                      <strong>{r.user_name || "User"}</strong>
+                      <span className="ms-2 badge badge-soft">{r.rating} ★</span>
+                      <span className="ms-2 small text-muted">{new Date(r.created_at).toLocaleDateString()}</span>
+                      {r.comment && <p className="mb-0 mt-1 small">{r.comment}</p>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
