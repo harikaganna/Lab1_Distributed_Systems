@@ -7,7 +7,7 @@ A Yelp-style restaurant discovery and review platform built with React + FastAPI
 - **Backend:** Python, FastAPI, SQLAlchemy, Pydantic
 - **Database:** MySQL
 - **Auth:** JWT (python-jose) + bcrypt
-- **AI Assistant:** LangChain + OpenAI + Tavily web search
+- **AI Assistant:** LangChain + Ollama (phi3:mini) + Tavily web search
 
 ## Features
 
@@ -36,6 +36,7 @@ A Yelp-style restaurant discovery and review platform built with React + FastAPI
 - Python 3.9+
 - Node.js 18+
 - MySQL 8+
+- Ollama with phi3:mini (`ollama pull phi3:mini`)
 
 ### Database
 ```sql
@@ -74,7 +75,6 @@ DATABASE_URL=mysql+pymysql://root:yourpassword@localhost:3306/yelp_db
 SECRET_KEY=your-secret-key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
-OPENAI_API_KEY=your-openai-key       # optional, fallback to keyword search
 TAVILY_API_KEY=your-tavily-key       # optional, for web search enrichment
 ```
 
@@ -100,6 +100,7 @@ TAVILY_API_KEY=your-tavily-key       # optional, for web search enrichment
 - `PUT /restaurants/{id}` — Update restaurant
 - `DELETE /restaurants/{id}` — Delete restaurant
 - `POST /restaurants/{id}/claim` — Claim restaurant (owners only)
+- `POST /restaurants/{id}/photos` — Upload restaurant photo
 
 ### Reviews
 - `POST /restaurants/{id}/reviews` — Create review
