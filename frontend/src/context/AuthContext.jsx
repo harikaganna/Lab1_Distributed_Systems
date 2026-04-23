@@ -1,54 +1,26 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { api } from "../api/axios";
+// Legacy AuthContext - now backed by Redux store
+// Kept for backward compatibility. Use Redux selectors directly in new code.
+import React, { createContext, useContext } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { selectUser, selectAuthLoading, loginUser, signupUser, ownerSignupUser, logout } from "../store/slices/authSlice";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      api.get("/users/me")
-        .then((res) => setUser(res.data))
-        .catch(() => localStorage.removeItem("token"))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  const login = async (email, password) => {
-    const res = await api.post("/auth/login", { email, password });
-    localStorage.setItem("token", res.data.access_token);
-    const me = await api.get("/users/me");
-    setUser(me.data);
-    return me.data;
-  };
-
-  const signup = async (name, email, password, role = "user") => {
-    await api.post("/auth/signup", { name, email, password, role });
-    return login(email, password);
-  };
-
-  const ownerSignup = async (name, email, password, restaurantLocation) => {
-    await api.post("/auth/signup/owner", {
-      name, email, password, restaurant_location: restaurantLocation,
-    });
-    return login(email, password);
-  };
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, loading, login, signup, ownerSignup, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return children;
 }
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const user = useSelector(selectUser);
+  const loading = useSelector(selectAuthLoading);
+  const dispatch = useDispatch();
+
+  return {
+    user,
+    loading,
+    login: (email, password) => dispatch(loginUser({ email, password })).unwrap(),
+    signup: (name, email, password, role) => dispatch(signupUser({ name, email, password, role })).unwrap(),
+    ownerSignup: (name, email, password, loc) => dispatch(ownerSignupUser({ name, email, password, restaurant_location: loc })).unwrap(),
+    logout: () => dispatch(logout()),
+  };
+};

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { api } from "../api/axios";
-import { useAuth } from "../context/AuthContext";
+import { api, restaurantApi, reviewApi } from "../api/axios";
+import { useSelector } from "react-redux";
+import { selectUser } from "../store/slices/authSlice";
 import { Link } from "react-router-dom";
 
 export default function OwnerDashboard() {
-  const { user } = useAuth();
+  const user = useSelector(selectUser);
   const [restaurants, setRestaurants] = useState([]);
   const [selectedReviews, setSelectedReviews] = useState(null);
   const [selectedName, setSelectedName] = useState("");
@@ -15,7 +16,7 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     if (!user) return;
-    api.get("/restaurants?limit=200").then((res) => {
+    restaurantApi.get("/restaurants?limit=200").then((res) => {
       const owned = res.data.filter((r) => r.owner_id === user.id);
       setRestaurants(owned);
       buildAnalytics(owned);
@@ -27,54 +28,44 @@ export default function OwnerDashboard() {
     let allReviews = [];
     for (const r of owned) {
       try {
-        const res = await api.get(`/restaurants/${r.id}/reviews`);
+        const res = await reviewApi.get(`/restaurants/${r.id}/reviews`);
         allReviews.push(...res.data.map((rev) => ({ ...rev, restaurant_name: r.name })));
       } catch {}
     }
-
     const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     allReviews.forEach((r) => { dist[r.rating] = (dist[r.rating] || 0) + 1; });
-
     const totalRating = allReviews.reduce((s, r) => s + r.rating, 0);
     const avgRating = allReviews.length ? (totalRating / allReviews.length).toFixed(2) : "N/A";
-
     const positive = allReviews.filter((r) => r.rating >= 4).length;
     const neutral = allReviews.filter((r) => r.rating === 3).length;
     const negative = allReviews.filter((r) => r.rating <= 2).length;
-
     const recent = [...allReviews].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
-
     setAnalytics({ dist, avgRating, totalReviews: allReviews.length, positive, neutral, negative, recent });
   };
 
   const viewReviews = async (id, name) => {
     try {
-      const res = await api.get(`/restaurants/${id}/reviews`);
+      const res = await reviewApi.get(`/restaurants/${id}/reviews`);
       setSelectedReviews(res.data);
       setSelectedName(name);
       setSelectedId(id);
-    } catch (err) {
-      setMsg(err.response?.data?.detail || "Error loading reviews");
-    }
+    } catch (err) { setMsg(err.response?.data?.detail || "Error loading reviews"); }
   };
 
   const claimRestaurant = async () => {
     setMsg("");
     try {
-      await api.post(`/restaurants/${claimId}/claim`);
+      await restaurantApi.post(`/restaurants/${claimId}/claim`);
       setMsg("Restaurant claimed!");
       setClaimId("");
-      const res = await api.get("/restaurants?limit=200");
+      const res = await restaurantApi.get("/restaurants?limit=200");
       const owned = res.data.filter((r) => r.owner_id === user.id);
       setRestaurants(owned);
       buildAnalytics(owned);
-    } catch (err) {
-      setMsg(err.response?.data?.detail || "Error claiming restaurant");
-    }
+    } catch (err) { setMsg(err.response?.data?.detail || "Error claiming restaurant"); }
   };
 
   if (!user || user.role !== "owner") return <p>Owner access only.</p>;
-
   const maxDist = analytics ? Math.max(...Object.values(analytics.dist), 1) : 1;
 
   return (
@@ -82,43 +73,33 @@ export default function OwnerDashboard() {
       <h4 className="mb-3">Owner Dashboard</h4>
       {msg && <div className="alert alert-info alert-clean py-2">{msg}</div>}
 
-      {/* Analytics */}
       {analytics && (
         <div className="row g-3 mb-4">
           <div className="col-md-3">
-            <div className="card card-clean text-center">
-              <div className="card-body">
-                <h2 style={{ color: "var(--brand)" }}>{analytics.totalReviews}</h2>
-                <p className="small text-muted mb-0">Total Reviews</p>
-              </div>
-            </div>
+            <div className="card card-clean text-center"><div className="card-body">
+              <h2 style={{ color: "var(--brand)" }}>{analytics.totalReviews}</h2>
+              <p className="small text-muted mb-0">Total Reviews</p>
+            </div></div>
           </div>
           <div className="col-md-3">
-            <div className="card card-clean text-center">
-              <div className="card-body">
-                <h2 style={{ color: "var(--brand)" }}>{analytics.avgRating}</h2>
-                <p className="small text-muted mb-0">Average Rating</p>
-              </div>
-            </div>
+            <div className="card card-clean text-center"><div className="card-body">
+              <h2 style={{ color: "var(--brand)" }}>{analytics.avgRating}</h2>
+              <p className="small text-muted mb-0">Average Rating</p>
+            </div></div>
           </div>
           <div className="col-md-3">
-            <div className="card card-clean text-center">
-              <div className="card-body">
-                <h2 style={{ color: "var(--brand)" }}>{restaurants.length}</h2>
-                <p className="small text-muted mb-0">Restaurants</p>
-              </div>
-            </div>
+            <div className="card card-clean text-center"><div className="card-body">
+              <h2 style={{ color: "var(--brand)" }}>{restaurants.length}</h2>
+              <p className="small text-muted mb-0">Restaurants</p>
+            </div></div>
           </div>
           <div className="col-md-3">
-            <div className="card card-clean text-center">
-              <div className="card-body">
-                <h2 style={{ color: "#2e7d32" }}>{analytics.positive}</h2>
-                <p className="small text-muted mb-0">Positive (4-5★)</p>
-              </div>
-            </div>
+            <div className="card card-clean text-center"><div className="card-body">
+              <h2 style={{ color: "#2e7d32" }}>{analytics.positive}</h2>
+              <p className="small text-muted mb-0">Positive (4-5★)</p>
+            </div></div>
           </div>
 
-          {/* Ratings Distribution */}
           <div className="col-md-6">
             <div className="card card-clean">
               <div className="card-header"><strong>Ratings Distribution</strong></div>
@@ -127,12 +108,7 @@ export default function OwnerDashboard() {
                   <div key={star} className="d-flex align-items-center gap-2 mb-2">
                     <span className="small" style={{ width: 30 }}>{star} ★</span>
                     <div className="flex-grow-1" style={{ background: "var(--border)", borderRadius: 4, height: 20 }}>
-                      <div style={{
-                        width: `${(analytics.dist[star] / maxDist) * 100}%`,
-                        background: "var(--brand)", borderRadius: 4, height: 20,
-                        minWidth: analytics.dist[star] > 0 ? 8 : 0,
-                        transition: "width 0.3s"
-                      }} />
+                      <div style={{ width: `${(analytics.dist[star] / maxDist) * 100}%`, background: "var(--brand)", borderRadius: 4, height: 20, minWidth: analytics.dist[star] > 0 ? 8 : 0, transition: "width 0.3s" }} />
                     </div>
                     <span className="small text-muted" style={{ width: 24 }}>{analytics.dist[star]}</span>
                   </div>
@@ -141,7 +117,6 @@ export default function OwnerDashboard() {
             </div>
           </div>
 
-          {/* Sentiment */}
           <div className="col-md-6">
             <div className="card card-clean">
               <div className="card-header"><strong>Sentiment Analysis</strong></div>
@@ -164,7 +139,6 @@ export default function OwnerDashboard() {
             </div>
           </div>
 
-          {/* Recent Reviews */}
           {analytics.recent.length > 0 && (
             <div className="col-12">
               <div className="card card-clean">
@@ -190,7 +164,6 @@ export default function OwnerDashboard() {
         </div>
       )}
 
-      {/* Claim section */}
       <div className="card card-clean mb-4">
         <div className="card-header"><strong>Claim a Restaurant</strong></div>
         <div className="card-body">
@@ -201,7 +174,6 @@ export default function OwnerDashboard() {
         </div>
       </div>
 
-      {/* Owned restaurants + Reviews side by side */}
       <h5>My Restaurants ({restaurants.length})</h5>
       <div className="row">
         <div className={selectedReviews ? "col-md-6" : "col-12"}>
@@ -209,12 +181,8 @@ export default function OwnerDashboard() {
             <div key={r.id} className="card card-clean mb-2" style={selectedId === r.id ? { borderColor: "var(--brand)" } : {}}>
               <div className="card-body py-2 d-flex justify-content-between align-items-center">
                 <div>
-                  <Link to={`/restaurants/${r.id}`} style={{ color: "var(--brand)", textDecoration: "none" }}>
-                    {r.name}
-                  </Link>
-                  <span className="ms-2 small text-muted">
-                    {r.avg_rating ? `${r.avg_rating} ★` : "No ratings"} · {r.review_count} reviews
-                  </span>
+                  <Link to={`/restaurants/${r.id}`} style={{ color: "var(--brand)", textDecoration: "none" }}>{r.name}</Link>
+                  <span className="ms-2 small text-muted">{r.avg_rating ? `${r.avg_rating} ★` : "No ratings"} · {r.review_count} reviews</span>
                 </div>
                 <div>
                   <button className="btn btn-sm btn-soft me-1" onClick={() => viewReviews(r.id, r.name)}>View Reviews</button>
