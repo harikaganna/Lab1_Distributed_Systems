@@ -115,7 +115,10 @@ def search_restaurants(
         ]
     if keyword:
         kw_regex = {"$regex": keyword, "$options": "i"}
-        keyword_or = [{"description": kw_regex}, {"amenities": kw_regex}, {"name": kw_regex}]
+        keyword_or = [
+            {"name": kw_regex}, {"description": kw_regex},
+            {"amenities": kw_regex}, {"cuisine_type": kw_regex}, {"ambiance": kw_regex},
+        ]
         if "$or" in query:
             query["$and"] = [{"$or": query.pop("$or")}, {"$or": keyword_or}]
         else:

@@ -7,6 +7,11 @@ import { fetchRestaurantDetail, selectRestaurantDetail } from "../store/slices/r
 import { fetchReviews, createReview, updateReview, deleteReview, selectReviews } from "../store/slices/reviewSlice";
 import { addFavourite } from "../store/slices/favouriteSlice";
 
+function titleCase(str) {
+  if (!str) return "";
+  return str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function RestaurantDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
@@ -98,15 +103,22 @@ export default function RestaurantDetail() {
             <div>
               <h3>{restaurant.name}</h3>
               <p className="text-muted mb-1">
-                {restaurant.cuisine_type}{" · "}{restaurant.city}
+                {titleCase(restaurant.cuisine_type)}{" · "}{restaurant.city}
                 {restaurant.state && `, ${restaurant.state}`}
                 {restaurant.price_range && ` · ${restaurant.price_range}`}
-                {restaurant.ambiance && ` · ${restaurant.ambiance}`}
+                {restaurant.ambiance && ` · ${titleCase(restaurant.ambiance)}`}
               </p>
               {restaurant.address && <p className="small mb-1">📍 {restaurant.address} {restaurant.zip_code || ""}</p>}
               {restaurant.phone && <p className="small mb-1">📞 {restaurant.phone}</p>}
               {restaurant.hours && <p className="small mb-1">🕐 {restaurant.hours}</p>}
               {restaurant.description && <p className="mt-2">{restaurant.description}</p>}
+              {restaurant.amenities && (
+                <div className="mt-2">
+                  {restaurant.amenities.split(",").map((a) => a.trim()).filter(Boolean).map((a) => (
+                    <span key={a} className="badge badge-soft me-1 mb-1">{titleCase(a)}</span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="text-end">
               {restaurant.avg_rating && <span className="badge badge-soft fs-5">{restaurant.avg_rating} ★</span>}
