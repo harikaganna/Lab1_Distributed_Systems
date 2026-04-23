@@ -1,28 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/axios";
-import { useAuth } from "../context/AuthContext";
+import { useDispatch, useSelector } from "react-redux";
+import { selectUser } from "../store/slices/authSlice";
+import { fetchFavourites, removeFavourite, selectFavourites } from "../store/slices/favouriteSlice";
 
 export default function Favourites() {
-  const { user } = useAuth();
-  const [favourites, setFavourites] = useState([]);
-
-  async function loadFavourites() {
-    try {
-      const response = await api.get("/favourites");
-      setFavourites(response.data);
-    } catch (err) {
-      console.error("Failed to load favourites:", err);
-    }
-  }
+  const user = useSelector(selectUser);
+  const favourites = useSelector(selectFavourites);
+  const dispatch = useDispatch();
 
   useEffect(() => {
-    if (user) loadFavourites();
+    if (user) dispatch(fetchFavourites());
   }, [user]);
 
-  async function removeFavourite(restaurantId) {
-    await api.delete(`/favourites/${restaurantId}`);
-    loadFavourites();
+  function handleRemove(restaurantId) {
+    dispatch(removeFavourite(restaurantId));
   }
 
   if (!user) return <p>Please log in to see favourites.</p>;
@@ -37,16 +29,10 @@ export default function Favourites() {
         favourites.map((fav) => (
           <div key={fav.id} className="card card-clean mb-2">
             <div className="card-body py-2 d-flex justify-content-between align-items-center">
-              <Link
-                to={`/restaurants/${fav.restaurant_id}`}
-                style={{ color: "var(--brand)", textDecoration: "none" }}
-              >
+              <Link to={`/restaurants/${fav.restaurant_id}`} style={{ color: "var(--brand)", textDecoration: "none" }}>
                 ❤️ {fav.restaurant_name || `Restaurant #${fav.restaurant_id}`}
               </Link>
-              <button
-                className="btn btn-sm btn-outline-danger"
-                onClick={() => removeFavourite(fav.restaurant_id)}
-              >
+              <button className="btn btn-sm btn-outline-danger" onClick={() => handleRemove(fav.restaurant_id)}>
                 Remove
               </button>
             </div>

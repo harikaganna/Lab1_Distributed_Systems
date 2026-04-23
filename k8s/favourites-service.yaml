@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: favourites-service
+  namespace: yelp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: favourites-service
+  template:
+    metadata:
+      labels:
+        app: favourites-service
+    spec:
+      containers:
+        - name: favourites-service
+          image: REPLACE_ECR_URL/yelp/favourites-service:latest
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef:
+                name: yelp-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: yelp-secret
+                  key: SECRET_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: favourites-service
+  namespace: yelp
+spec:
+  selector:
+    app: favourites-service
+  ports:
+    - port: 8004
+      targetPort: 8004
