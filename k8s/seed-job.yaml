@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-db
+  namespace: yelp
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      containers:
+        - name: seed
+          image: REPLACE_ECR_URL/yelp/seed:latest
+          envFrom:
+            - configMapRef:
+                name: yelp-config
+      restartPolicy: Never
+  backoffLimit: 3

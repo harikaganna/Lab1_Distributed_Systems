@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useDispatch, useSelector } from "react-redux";
+import { signupUser, ownerSignupUser, selectAuthError, clearAuthError } from "../store/slices/authSlice";
 
 export default function Signup() {
   const [isOwner, setIsOwner] = useState(false);
@@ -8,26 +9,20 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [location, setLocation] = useState("");
-  const [error, setError] = useState("");
-
-  const { signup, ownerSignup } = useAuth();
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const error = useSelector(selectAuthError);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError("");
-
-    try {
-      if (isOwner) {
-        await ownerSignup(name, email, password, location);
-      } else {
-        await signup(name, email, password);
-      }
-      navigate("/");
-    } catch (err) {
-      const message = err.response?.data?.detail || "Signup failed";
-      setError(message);
+    dispatch(clearAuthError());
+    let result;
+    if (isOwner) {
+      result = await dispatch(ownerSignupUser({ name, email, password, restaurant_location: location }));
+    } else {
+      result = await dispatch(signupUser({ name, email, password, role: "user" }));
     }
+    if (!result.error) navigate("/");
   }
 
   return (

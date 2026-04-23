@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: review-service
+  namespace: yelp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: review-service
+  template:
+    metadata:
+      labels:
+        app: review-service
+    spec:
+      containers:
+        - name: review-service
+          image: REPLACE_ECR_URL/yelp/review-service:latest
+          ports:
+            - containerPort: 8003
+          envFrom:
+            - configMapRef:
+                name: yelp-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: yelp-secret
+                  key: SECRET_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: review-service
+  namespace: yelp
+spec:
+  selector:
+    app: review-service
+  ports:
+    - port: 8003
+      targetPort: 8003
