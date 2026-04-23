@@ -1,26 +1,20 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useDispatch, useSelector } from "react-redux";
+import { loginUser, selectAuthError, clearAuthError } from "../store/slices/authSlice";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-
-  const { login } = useAuth();
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const error = useSelector(selectAuthError);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError("");
-
-    try {
-      await login(email, password);
-      navigate("/");
-    } catch (err) {
-      const message = err.response?.data?.detail || "Login failed";
-      setError(message);
-    }
+    dispatch(clearAuthError());
+    const result = await dispatch(loginUser({ email, password }));
+    if (!result.error) navigate("/");
   }
 
   return (

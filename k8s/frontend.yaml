@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: yelp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: REPLACE_ECR_URL/yelp/frontend:latest
+          ports:
+            - containerPort: 3006
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: yelp
+spec:
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+    - port: 3006
+      targetPort: 3006

@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: review-worker
+  namespace: yelp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: review-worker
+  template:
+    metadata:
+      labels:
+        app: review-worker
+    spec:
+      containers:
+        - name: review-worker
+          image: REPLACE_ECR_URL/yelp/review-worker:latest
+          envFrom:
+            - configMapRef:
+                name: yelp-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: yelp-secret
+                  key: SECRET_KEY
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restaurant-worker
+  namespace: yelp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: restaurant-worker
+  template:
+    metadata:
+      labels:
+        app: restaurant-worker
+    spec:
+      containers:
+        - name: restaurant-worker
+          image: REPLACE_ECR_URL/yelp/restaurant-worker:latest
+          envFrom:
+            - configMapRef:
+                name: yelp-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-worker
+  namespace: yelp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-worker
+  template:
+    metadata:
+      labels:
+        app: user-worker
+    spec:
+      containers:
+        - name: user-worker
+          image: REPLACE_ECR_URL/yelp/user-worker:latest
+          envFrom:
+            - configMapRef:
+                name: yelp-config

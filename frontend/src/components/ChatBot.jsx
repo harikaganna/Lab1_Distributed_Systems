@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { api } from "../api/axios";
-import { useAuth } from "../context/AuthContext";
+import { useSelector } from "react-redux";
+import { selectUser } from "../store/slices/authSlice";
 import { Link } from "react-router-dom";
 
 export default function ChatBot() {
-  const { user } = useAuth();
+  const user = useSelector(selectUser);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
