@@ -4,5 +4,5 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY shared/ shared/
 COPY services/favourites_service/ services/favourites_service/
-EXPOSE 7104
-CMD ["uvicorn", "services.favourites_service.main:app", "--host", "0.0.0.0", "--port", "7104"]
+EXPOSE 8004
+CMD ["uvicorn", "services.favourites_service.main:app", "--host", "0.0.0.0", "--port", "8004"]
