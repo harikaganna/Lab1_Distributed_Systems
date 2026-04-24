@@ -5,5 +5,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY shared/ shared/
 COPY services/restaurant_service/ services/restaurant_service/
 RUN mkdir -p uploads
-EXPOSE 7102
-CMD ["uvicorn", "services.restaurant_service.main:app", "--host", "0.0.0.0", "--port", "7102"]
+EXPOSE 8002
+CMD ["uvicorn", "services.restaurant_service.main:app", "--host", "0.0.0.0", "--port", "8002"]
