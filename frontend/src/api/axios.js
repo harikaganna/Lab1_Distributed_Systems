@@ -4,10 +4,10 @@ import axios from "axios";
 // Locally: hit individual service ports directly
 const IS_DOCKER = import.meta.env.VITE_DOCKER === "true";
 
-const API_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_API_BASE || "http://localhost:8001");
-const RESTAURANT_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_RESTAURANT_BASE || "http://localhost:8002");
-const REVIEW_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_REVIEW_BASE || "http://localhost:8003");
-const FAVOURITES_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_FAVOURITES_BASE || "http://localhost:8004");
+const API_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_API_BASE || "http://localhost:7101");
+const RESTAURANT_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_RESTAURANT_BASE || "http://localhost:7102");
+const REVIEW_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_REVIEW_BASE || "http://localhost:7103");
+const FAVOURITES_BASE = IS_DOCKER ? "" : (import.meta.env.VITE_FAVOURITES_BASE || "http://localhost:7104");
 
 export const api = axios.create({
   baseURL: API_BASE,
