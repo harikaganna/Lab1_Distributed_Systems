@@ -39,7 +39,11 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     session = db.sessions.find_one({"user_id": user_id, "token": token})
     if not session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
-    if session.get("expires_at") and session["expires_at"] < datetime.now(timezone.utc):
+    expires_at = session.get("expires_at")
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < datetime.now(timezone.utc):
         db.sessions.delete_one({"_id": session["_id"]})
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
 
