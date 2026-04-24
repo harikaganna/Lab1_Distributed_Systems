@@ -61,7 +61,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.user
     ports:
-      - "8001:8001"
+      - "7101:7101"
     environment:
       MONGO_URL: mongodb://mongodb:27017
       MONGO_DB: yelp_db
@@ -84,7 +84,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.restaurant
     ports:
-      - "8002:8002"
+      - "7102:7102"
     environment:
       MONGO_URL: mongodb://mongodb:27017
       MONGO_DB: yelp_db
@@ -107,7 +107,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.review
     ports:
-      - "8003:8003"
+      - "7103:7103"
     environment:
       MONGO_URL: mongodb://mongodb:27017
       MONGO_DB: yelp_db
@@ -126,7 +126,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.favourites
     ports:
-      - "8004:8004"
+      - "7104:7104"
     environment:
       MONGO_URL: mongodb://mongodb:27017
       MONGO_DB: yelp_db
@@ -195,7 +195,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "3006:3006"
+      - "7100:7100"
     depends_on:
       - user-service
       - restaurant-service

@@ -4,10 +4,9 @@ import { Link } from "react-router-dom";
 function getImageUrl(restaurant) {
   if (restaurant.photos) {
     const first = restaurant.photos.split(",")[0].trim();
-    if (first) return `http://localhost:8002${first}`;
+    if (first) return `http://localhost:7102${first}`;
   }
-  const seed = encodeURIComponent(restaurant.name);
-  return `https://picsum.photos/seed/${seed}/400/200`;
+  return "/restaurant-placeholder.png";
 }
 
 export default function RestaurantCard({ restaurant }) {
@@ -20,7 +19,7 @@ export default function RestaurantCard({ restaurant }) {
           src={getImageUrl(restaurant)}
           alt={name}
           style={{ width: 160, height: "100%", minHeight: 120, objectFit: "cover" }}
-          onError={(e) => { e.target.src = `https://picsum.photos/seed/${id}/400/200`; }}
+          onError={(e) => { e.target.src = "/restaurant-placeholder.png"; }}
         />
       </Link>
       <div className="card-body">
