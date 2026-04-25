@@ -140,6 +140,29 @@ services:
     networks:
       - yelp-net
 
+  owner-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.owner
+    ports:
+      - "8006:8001"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      MONGO_DB: yelp_db
+      SECRET_KEY: ${SECRET_KEY:-supersecretkey123changeme}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    volumes:
+      - uploads:/app/uploads
+    networks:
+      - yelp-net
+
   ai-service:
     build:
       context: ./backend
