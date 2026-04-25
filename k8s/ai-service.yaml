@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service
+  namespace: yelp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-service
+  template:
+    metadata:
+      labels:
+        app: ai-service
+    spec:
+      containers:
+        - name: ai-service
+          image: REPLACE_ECR_URL/yelp/ai-service:latest
+          ports:
+            - containerPort: 8005
+          envFrom:
+            - configMapRef:
+                name: yelp-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: yelp-secret
+                  key: SECRET_KEY
+            - name: OLLAMA_BASE_URL
+              value: "http://host.docker.internal:11434"
+            - name: OLLAMA_MODEL
+              value: "llama3.1:latest"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+  namespace: yelp
+spec:
+  selector:
+    app: ai-service
+  ports:
+    - port: 8005
+      targetPort: 8005
