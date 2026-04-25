@@ -111,6 +111,7 @@ kubectl apply -f k8s/user-service.yaml
 kubectl apply -f k8s/restaurant-service.yaml
 kubectl apply -f k8s/review-service.yaml
 kubectl apply -f k8s/favourites-service.yaml
+kubectl apply -f k8s/ai-service.yaml
 kubectl apply -f k8s/workers.yaml
 kubectl apply -f k8s/frontend.yaml
 
