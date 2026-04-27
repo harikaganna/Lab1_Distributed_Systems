@@ -17,7 +17,7 @@ spec:
         - name: owner-service
           image: REPLACE_ECR_URL/yelp/owner-service:latest
           ports:
-            - containerPort: 8001
+            - containerPort: 8006
           envFrom:
             - configMapRef:
                 name: yelp-config
@@ -37,5 +37,5 @@ spec:
   selector:
     app: owner-service
   ports:
-    - port: 8001
-      targetPort: 8001
+    - port: 8006
+      targetPort: 8006

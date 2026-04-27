@@ -142,6 +142,13 @@ def login(payload: LoginRequest):
     return {"access_token": token, "token_type": "bearer"}
 
 
+@app.post("/auth/logout", status_code=200)
+def logout(token: str = Depends(oauth2_scheme)):
+    db = get_db()
+    db.sessions.delete_one({"token": token})
+    return {"message": "Logged out successfully"}
+
+
 # --- User Profile ---
 @app.get("/users/me")
 def get_profile(user=Depends(get_current_user)):

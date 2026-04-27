@@ -82,8 +82,11 @@ Instructions:
 - Keep responses concise and helpful."""
 
 
+MEAL_KEYWORDS = {"dinner", "lunch", "breakfast", "brunch", "eat", "food", "meal", "tonight",
+                  "restaurant", "place", "find", "recommend", "suggestion", "hungry", "want"}
+
 def keyword_fallback(message: str, restaurants: list, db) -> dict:
-    keywords = message.lower().split()
+    keywords = [w for w in message.lower().split() if w not in MEAL_KEYWORDS]
     matches = []
     for r in restaurants:
         text = " ".join([
@@ -91,7 +94,7 @@ def keyword_fallback(message: str, restaurants: list, db) -> dict:
             r.get("description", ""), r.get("city", ""),
             r.get("ambiance", ""), r.get("amenities", ""),
         ]).lower()
-        if any(kw in text for kw in keywords):
+        if keywords and any(kw in text for kw in keywords):
             avg, count = get_review_stats(db, r["id"])
             matches.append({
                 "id": r["id"], "name": r["name"],
@@ -99,11 +102,24 @@ def keyword_fallback(message: str, restaurants: list, db) -> dict:
                 "price": r.get("price_range"), "city": r.get("city"),
             })
 
-    if matches:
+    # no keyword matches — return top-rated restaurants as a general suggestion
+    if not matches:
+        all_rated = []
+        for r in restaurants:
+            avg, count = get_review_stats(db, r["id"])
+            if avg:
+                all_rated.append({
+                    "id": r["id"], "name": r["name"],
+                    "cuisine": r.get("cuisine_type"), "rating": avg,
+                    "price": r.get("price_range"), "city": r.get("city"),
+                })
+        matches = sorted(all_rated, key=lambda x: x["rating"] or 0, reverse=True)[:5]
+        names = ", ".join(m["name"] for m in matches)
+        response_text = (f"Here are some of our top-rated restaurants: {names}. "
+                         f"You can also search by cuisine (e.g. 'Mexican', 'Chinese'), city, or amenity (e.g. 'wifi', 'outdoor seating').")
+    else:
         names = ", ".join(m["name"] for m in matches[:5])
         response_text = f"Based on your query, here are some matches: {names}. Would you like more details on any of them?"
-    else:
-        response_text = "I couldn't find restaurants matching your query. Try searching by cuisine type, city, or amenity."
 
     return {"response": response_text, "recommendations": matches[:5]}
 
