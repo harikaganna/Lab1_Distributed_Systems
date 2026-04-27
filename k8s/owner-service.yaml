@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: owner-service
+  namespace: yelp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: owner-service
+  template:
+    metadata:
+      labels:
+        app: owner-service
+    spec:
+      containers:
+        - name: owner-service
+          image: REPLACE_ECR_URL/yelp/owner-service:latest
+          ports:
+            - containerPort: 8006
+          envFrom:
+            - configMapRef:
+                name: yelp-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: yelp-secret
+                  key: SECRET_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: owner-service
+  namespace: yelp
+spec:
+  selector:
+    app: owner-service
+  ports:
+    - port: 8006
+      targetPort: 8006

@@ -21,6 +21,19 @@ def upsert_user(name, email, role):
         return str(result.inserted_id)
     return str(u["_id"])
 
+# --- JMeter test user (used by performance tests) ---
+jmeter_user = db.users.find_one({"email": "seed@yelp.com"})
+if not jmeter_user:
+    db.users.insert_one({
+        "name": "JMeter Seed User",
+        "email": "seed@yelp.com",
+        "hashed_password": hash_password("seedpassword123"),
+        "role": "user",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    })
+    print("Created JMeter seed user: seed@yelp.com")
+
 # --- Owners ---
 owners = [
     ("Marco Rossi",     "marco@owner.com"),
@@ -238,11 +251,41 @@ db.sessions.create_index("user_id")
 db.reviews.create_index("restaurant_id")
 db.reviews.create_index("user_id")
 db.favourites.create_index([("user_id", 1), ("restaurant_id", 1)], unique=True)
+db.activity_logs.create_index([("timestamp", -1)])
+db.activity_logs.create_index([("entity_type", 1), ("entity_id", 1)])
 
 print("MongoDB indexes created.")
+
+# --- Seed activity logs ---
+if db.activity_logs.count_documents({}) == 0:
+    sample_logs = []
+    now = datetime.now(timezone.utc)
+    rest_docs = list(db.restaurants.find({}, {"_id": 1, "name": 1}).limit(5))
+    review_docs = list(db.reviews.find({}, {"_id": 1, "restaurant_id": 1}).limit(5))
+    sample_reviewer_id = reviewer_ids[0] if reviewer_ids else "unknown"
+
+    for r in rest_docs:
+        sample_logs.append({
+            "action": "restaurant_created", "entity_type": "restaurant",
+            "entity_id": str(r["_id"]), "user_id": owner_ids[0] if owner_ids else None,
+            "details": {"name": r.get("name", "")},
+            "timestamp": now,
+        })
+    for rv in review_docs:
+        sample_logs.append({
+            "action": "review_created", "entity_type": "review",
+            "entity_id": str(rv["_id"]), "user_id": sample_reviewer_id,
+            "details": {"restaurant_id": rv.get("restaurant_id", "")},
+            "timestamp": now,
+        })
+    if sample_logs:
+        db.activity_logs.insert_many(sample_logs)
+        print(f"Seeded {len(sample_logs)} activity log entries.")
+
 print("\nOwner accounts (password: password123):")
 for name, email in owners:
     print(f"  {email}")
 print("\nReviewer accounts (password: password123):")
 for name, email in reviewers:
     print(f"  {email}")
+print("\nJMeter test account: seed@yelp.com / seedpassword123")

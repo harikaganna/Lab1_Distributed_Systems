@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from shared.database import get_db
 from shared.auth import get_current_user
 from shared.kafka_producer import publish_event
+from shared.activity_logger import log_activity
 
 app = FastAPI(title="Restaurant Service")
 
@@ -96,6 +97,7 @@ def create_restaurant(payload: RestaurantCreate, user=Depends(get_current_user))
         "action": "created", "restaurant_id": str(result.inserted_id),
         "name": data["name"], "user_id": user["id"],
     })
+    log_activity("restaurant_created", "restaurant", str(result.inserted_id), user["id"], {"name": data["name"]})
     return serialize_restaurant(db, data)
 
 
