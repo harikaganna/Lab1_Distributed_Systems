@@ -217,7 +217,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "3006:3006"
+      - "3009:3006"
     depends_on:
       - user-service
       - restaurant-service

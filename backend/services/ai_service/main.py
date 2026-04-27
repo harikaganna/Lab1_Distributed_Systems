@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -21,10 +22,17 @@ app.add_middleware(
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
+STOP_WORDS = {"a", "an", "the", "and", "or", "for", "to", "in", "at", "of", "me",
+              "good", "great", "best", "find", "recommend", "want", "like", "near",
+              "restaurant", "restaurants", "food", "place", "places", "some", "any",
+              "i", "can", "you", "with", "get", "give", "show", "tonight", "today"}
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
+FILLER_STARTS = (
+    "here are", "i've", "i have", "based on", "these are", "these places",
+    "these recommendations", "they also", "all of", "let me", "sure", "great",
+    "of course", "below are", "the following",
+)
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -55,31 +63,70 @@ def get_review_stats(db, restaurant_id):
     return None, 0
 
 
-def build_system_prompt(restaurants, db):
-    lines = []
+def find_relevant_restaurants(query: str, restaurants: list, db, top_n=3) -> list:
+    keywords = [w for w in query.lower().split() if w not in STOP_WORDS and len(w) > 2]
+    scored = []
     for r in restaurants:
-        avg, count = get_review_stats(db, r["id"])
-        rating_str = f"{avg}★ ({count} reviews)" if avg else "No ratings yet"
-        amenities = f", amenities: {r['amenities']}" if r.get("amenities") else ""
-        lines.append(
-            f"- {r['name']} | {r.get('cuisine_type','').title()} | {r.get('city','')} | "
-            f"{r.get('price_range','N/A')} | {rating_str}{amenities}"
-        )
+        text = " ".join([
+            r.get("name", ""), r.get("cuisine_type", ""), r.get("description", ""),
+            r.get("city", ""), r.get("ambiance", ""), r.get("amenities", ""),
+        ]).lower()
+        score = sum(text.count(kw) for kw in keywords)
+        if score > 0:
+            avg, _ = get_review_stats(db, r["id"])
+            scored.append((score, avg or 0, r, avg))
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return [
+        {"id": r["id"], "name": r["name"], "cuisine": r.get("cuisine_type"),
+         "rating": avg, "price": r.get("price_range"), "city": r.get("city"),
+         "description": r.get("description", "")}
+        for _, _, r, avg in scored[:top_n]
+    ]
 
-    restaurant_list = "\n".join(lines) if lines else "No restaurants available."
 
-    return f"""You are a friendly restaurant recommendation assistant for a Yelp-like app.
+def build_system_prompt(candidates: list) -> str:
+    if not candidates:
+        restaurant_list = "None"
+    else:
+        lines = [f"- {r['name']}: {r.get('description') or r.get('cuisine') or ''}" for r in candidates]
+        restaurant_list = "\n".join(lines)
 
-Available restaurants:
+    return f"""You are a restaurant recommendation assistant. Restaurant cards with full details are shown to the user separately — do NOT repeat prices, ratings, cuisines, or locations.
+
+Matching restaurants:
 {restaurant_list}
 
-Instructions:
-- Recommend restaurants from the list above based on the user's query.
-- Be conversational and explain why each recommendation fits.
-- Mention the restaurant name, cuisine, price range, and rating when recommending.
-- If asked about amenities like wifi, outdoor seating, or parking, use the amenities data.
-- If nothing matches well, say so honestly.
-- Keep responses concise and helpful."""
+Write 1-3 plain sentences (no lists, no bullet points, no bold, no formatting) explaining why these restaurants suit the user's request. Name each restaurant once. Nothing else."""
+
+
+def truncate_reply(text: str, candidate_names: list, max_sentences: int = 3) -> str:
+    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r'\*+', '', text)
+    text = re.sub(r'#+\s*', '', text)
+    text = re.sub(r'-\s+', '', text)
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+
+    all_sentences = re.split(r'(?<=[.!?])\s+', text)
+    names_lower = [n.lower() for n in candidate_names]
+
+    restaurant_sentences = [
+        s for s in all_sentences
+        if any(name in s.lower() for name in names_lower)
+    ]
+    if restaurant_sentences:
+        return " ".join(restaurant_sentences[:max_sentences])
+
+    non_filler = [s for s in all_sentences if not s.lower().startswith(FILLER_STARTS)]
+    return " ".join((non_filler or all_sentences)[:max_sentences])
+
+
+def extract_description(reply: str, restaurant_name: str) -> str:
+    sentences = re.split(r'(?<=[.!?])\s+', reply)
+    name_lower = restaurant_name.lower()
+    for sentence in sentences:
+        if name_lower in sentence.lower():
+            return sentence.strip()
+    return ""
 
 
 def keyword_fallback(message: str, restaurants: list, db) -> dict:
@@ -92,30 +139,32 @@ def keyword_fallback(message: str, restaurants: list, db) -> dict:
             r.get("ambiance", ""), r.get("amenities", ""),
         ]).lower()
         if any(kw in text for kw in keywords):
-            avg, count = get_review_stats(db, r["id"])
+            avg, _ = get_review_stats(db, r["id"])
             matches.append({
                 "id": r["id"], "name": r["name"],
                 "cuisine": r.get("cuisine_type"), "rating": avg,
                 "price": r.get("price_range"), "city": r.get("city"),
+                "description": "",
             })
 
     if matches:
-        names = ", ".join(m["name"] for m in matches[:5])
+        names = ", ".join(m["name"] for m in matches[:3])
         response_text = f"Based on your query, here are some matches: {names}. Would you like more details on any of them?"
     else:
         response_text = "I couldn't find restaurants matching your query. Try searching by cuisine type, city, or amenity."
 
-    return {"response": response_text, "recommendations": matches[:5]}
+    return {"response": response_text, "recommendations": matches[:3]}
 
 
 @app.post("/ai-assistant/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, user=Depends(get_current_user)):
     db = get_db()
     restaurants = get_restaurants(db)
+    candidates = find_relevant_restaurants(payload.message, restaurants, db)
 
     try:
-        llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL, temperature=0.7)
-        system_prompt = build_system_prompt(restaurants, db)
+        llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL, temperature=0.7, num_predict=120)
+        system_prompt = build_system_prompt(candidates)
 
         messages = [SystemMessage(content=system_prompt)]
         for msg in (payload.conversation_history or []):
@@ -126,19 +175,12 @@ def chat(payload: ChatRequest, user=Depends(get_current_user)):
         messages.append(HumanMessage(content=payload.message))
 
         response = llm.invoke(messages)
-        reply = response.content
+        reply = truncate_reply(response.content, [r["name"] for r in candidates])
 
-        recommendations = []
-        for r in restaurants:
-            if r["name"].lower() in reply.lower():
-                avg, _ = get_review_stats(db, r["id"])
-                recommendations.append({
-                    "id": r["id"], "name": r["name"],
-                    "cuisine": r.get("cuisine_type"), "rating": avg,
-                    "price": r.get("price_range"), "city": r.get("city"),
-                })
+        for r in candidates:
+            r["description"] = extract_description(reply, r["name"])
 
-        return {"response": reply, "recommendations": recommendations[:5]}
+        return {"response": reply, "recommendations": candidates}
 
     except Exception as e:
         error_str = str(e).lower()

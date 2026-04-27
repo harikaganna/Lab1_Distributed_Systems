@@ -27,7 +27,7 @@ def publish_event(topic: str, data: dict):
     if producer:
         try:
             producer.send(topic, value=data)
-            producer.flush()
+            producer.flush(timeout=3)
             logger.info(f"Published to {topic}: {data.get('action', 'unknown')}")
         except Exception as e:
             logger.error(f"Kafka publish failed: {e}")

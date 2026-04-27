@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { useSelector } from "react-redux";
-import { selectUser } from "../store/slices/authSlice";
+import React, { useState, useEffect, useRef } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { selectUser, fetchCurrentUser } from "../store/slices/authSlice";
 import { api } from "../api/axios";
 import { Link } from "react-router-dom";
+
+const IS_DOCKER = import.meta.env.VITE_DOCKER === "true";
+const UPLOADS_BASE = IS_DOCKER ? "" : "http://localhost:8001";
 
 const COUNTRIES = [
   "United States", "Canada", "Mexico", "United Kingdom", "India",
@@ -14,22 +17,34 @@ const SORT_OPTIONS = ["rating", "distance", "popularity", "price"];
 
 export default function Profile() {
   const user = useSelector(selectUser);
+  const dispatch = useDispatch();
+  const fileInputRef = useRef(null);
   const [activeTab, setActiveTab] = useState("profile");
   const [profile, setProfile] = useState({});
   const [preferences, setPreferences] = useState({});
   const [history, setHistory] = useState({ reviews: [], restaurants_added: [] });
   const [message, setMessage] = useState("");
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [hoverAvatar, setHoverAvatar] = useState(false);
 
+  const initials = user?.name
+    ? user.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+    : "?";
+
+  // Always fetch fresh data directly from the API on mount
   useEffect(() => {
-    if (!user) return;
-    setProfile({
-      name: user.name, phone: user.phone || "", about_me: user.about_me || "",
-      city: user.city || "", state: user.state || "", country: user.country || "",
-      languages: user.languages || "", gender: user.gender || "",
-    });
+    api.get("/users/me").then((res) => {
+      const u = res.data;
+      setProfile({
+        name: u.name || "", phone: u.phone || "", about_me: u.about_me || "",
+        city: u.city || "", state: u.state || "", country: u.country || "",
+        languages: u.languages || "", gender: u.gender || "",
+      });
+    }).catch(() => {});
     api.get("/users/me/preferences").then((res) => setPreferences(res.data)).catch(() => {});
     api.get("/users/me/history").then((res) => setHistory(res.data)).catch(() => {});
-  }, [user]);
+  }, []);
 
   if (!user) return <p>Please log in.</p>;
 
@@ -42,8 +57,19 @@ export default function Profile() {
 
   async function saveProfile(e) {
     e.preventDefault();
-    try { await api.put("/users/me", profile); setMessage("Profile updated!"); }
-    catch { setMessage("Error updating profile"); }
+    try {
+      const res = await api.put("/users/me", profile);
+      const u = res.data;
+      setProfile({
+        name: u.name || "", phone: u.phone || "", about_me: u.about_me || "",
+        city: u.city || "", state: u.state || "", country: u.country || "",
+        languages: u.languages || "", gender: u.gender || "",
+      });
+      dispatch(fetchCurrentUser());
+      setMessage("Profile updated!");
+    } catch {
+      setMessage("Error updating profile");
+    }
   }
 
   async function savePreferences(e) {
@@ -58,10 +84,19 @@ export default function Profile() {
   async function handlePictureUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
+    setPreviewUrl(URL.createObjectURL(file));
+    setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
-    try { await api.post("/users/me/profile-picture", formData, { headers: { "Content-Type": "multipart/form-data" } }); setMessage("Profile picture updated! Refresh to see."); }
-    catch { setMessage("Error uploading picture"); }
+    try {
+      await api.post("/users/me/profile-picture", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      await dispatch(fetchCurrentUser());
+      setMessage("Profile picture updated!");
+    } catch {
+      setMessage("Error uploading picture");
+      setPreviewUrl(null);
+    }
+    setUploading(false);
   }
 
   const tabs = ["profile", "preferences", "history"];
@@ -84,13 +119,40 @@ export default function Profile() {
         <div className="card card-clean">
           <div className="card-header"><strong>Edit Profile</strong></div>
           <div className="card-body">
-            <p className="small text-muted mb-3">Email: {user.email} · Role: {user.role}</p>
-            {user.profile_picture && (
-              <img src={`http://localhost:8006${user.profile_picture}`} alt="Profile" className="rounded-circle mb-3" style={{ width: 80, height: 80, objectFit: "cover" }} />
-            )}
-            <div className="mb-3">
-              <label className="form-label">Profile Picture</label>
-              <input type="file" className="form-control" accept="image/*" onChange={handlePictureUpload} />
+            <div className="d-flex flex-column align-items-center mb-4">
+              <div
+                onMouseEnter={() => setHoverAvatar(true)}
+                onMouseLeave={() => setHoverAvatar(false)}
+                onClick={() => !uploading && fileInputRef.current?.click()}
+                style={{ position: "relative", width: 100, height: 100, cursor: uploading ? "default" : "pointer" }}
+              >
+                {(previewUrl || user.profile_picture) ? (
+                  <img
+                    src={previewUrl || `${UPLOADS_BASE}${user.profile_picture}`}
+                    alt={user.name}
+                    style={{ width: 100, height: 100, borderRadius: "50%", objectFit: "cover", border: "3px solid var(--brand)" }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 100, height: 100, borderRadius: "50%", background: "var(--brand)",
+                    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "1.8rem", fontWeight: 600,
+                  }}>
+                    {initials}
+                  </div>
+                )}
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: "50%",
+                  background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center",
+                  justifyContent: "center", opacity: (hoverAvatar && !uploading) ? 1 : 0,
+                  transition: "opacity 0.15s",
+                }}>
+                  <span style={{ color: "#fff", fontSize: "1.4rem" }}>📷</span>
+                </div>
+              </div>
+              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePictureUpload} />
+              <div className="mt-2 small text-muted">{uploading ? "Uploading…" : "Click to change photo"}</div>
+              <div className="small text-muted mt-1">{user.email} · {user.role}</div>
             </div>
             <form onSubmit={saveProfile}>
               <div className="row g-3">
@@ -124,7 +186,7 @@ export default function Profile() {
           <div className="card-body">
             <form onSubmit={savePreferences}>
               <div className="row g-3">
-                <div className="col-md-6"><label className="form-label">Cuisine Preferences</label><input className="form-control" value={preferences.cuisine_preferences || ""} onChange={updatePrefField("cuisine_preferences")} placeholder="italian, indian, japanese" /></div>
+                <div className="col-md-6"><label className="form-label">Cuisine Preferences</label><input className="form-control" value={preferences.cuisine_preferences || ""} onChange={updatePrefField("cuisine_preferences")} placeholder="Italian, Indian, Japanese" /></div>
                 <div className="col-md-3"><label className="form-label">Price Range</label>
                   <select className="form-select" value={preferences.price_range || ""} onChange={updatePrefField("price_range")}>
                     <option value="">Any</option>
@@ -133,12 +195,12 @@ export default function Profile() {
                 </div>
                 <div className="col-md-3"><label className="form-label">Search Radius (mi)</label><input type="number" className="form-control" value={preferences.search_radius || ""} onChange={updatePrefField("search_radius")} min={1} max={100} /></div>
                 <div className="col-md-6"><label className="form-label">Preferred Location</label><input className="form-control" value={preferences.preferred_location || ""} onChange={updatePrefField("preferred_location")} placeholder="San Jose, CA" /></div>
-                <div className="col-md-6"><label className="form-label">Dietary Needs</label><input className="form-control" value={preferences.dietary_needs || ""} onChange={updatePrefField("dietary_needs")} placeholder="vegetarian, gluten-free" /></div>
-                <div className="col-md-6"><label className="form-label">Ambiance Preferences</label><input className="form-control" value={preferences.ambiance_preferences || ""} onChange={updatePrefField("ambiance_preferences")} placeholder="casual, romantic" /></div>
+                <div className="col-md-6"><label className="form-label">Dietary Needs</label><input className="form-control" value={preferences.dietary_needs || ""} onChange={updatePrefField("dietary_needs")} placeholder="Vegetarian, Gluten-Free" /></div>
+                <div className="col-md-6"><label className="form-label">Ambiance Preferences</label><input className="form-control" value={preferences.ambiance_preferences || ""} onChange={updatePrefField("ambiance_preferences")} placeholder="Casual, Romantic" /></div>
                 <div className="col-md-6"><label className="form-label">Sort By</label>
                   <select className="form-select" value={preferences.sort_preference || ""} onChange={updatePrefField("sort_preference")}>
                     <option value="">Default</option>
-                    {SORT_OPTIONS.map((s) => (<option key={s} value={s}>{s}</option>))}
+                    {SORT_OPTIONS.map((s) => (<option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>))}
                   </select>
                 </div>
               </div>
@@ -154,7 +216,7 @@ export default function Profile() {
           {(history.reviews || []).map((review) => (
             <div key={review.id} className="card card-clean mb-2">
               <div className="card-body py-2">
-                <Link to={`/restaurants/${review.restaurant_id}`} style={{ color: "var(--brand)" }}>Restaurant #{review.restaurant_id}</Link>
+                <Link to={`/restaurants/${review.restaurant_id}`} style={{ color: "var(--brand)" }}>{review.restaurant_name || `Restaurant #${review.restaurant_id}`}</Link>
                 <span className="ms-2 badge badge-soft">{review.rating} ★</span>
                 <span className="ms-2 small text-muted">{new Date(review.created_at).toLocaleDateString()}</span>
                 {review.comment && <p className="mb-0 mt-1 small">{review.comment}</p>}
@@ -166,7 +228,7 @@ export default function Profile() {
             <div key={rest.id} className="card card-clean mb-2">
               <div className="card-body py-2">
                 <Link to={`/restaurants/${rest.id}`} style={{ color: "var(--brand)" }}>{rest.name}</Link>
-                <span className="ms-2 small text-muted">{rest.cuisine_type} · {rest.city}</span>
+                <span className="ms-2 small text-muted">{rest.cuisine_type ? rest.cuisine_type.charAt(0).toUpperCase() + rest.cuisine_type.slice(1) : ""} · {rest.city}</span>
               </div>
             </div>
           ))}

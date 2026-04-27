@@ -83,8 +83,13 @@ export default function ChatBot() {
                             {r.rating && <span className="badge badge-soft" style={{ fontSize: "0.75rem" }}>{r.rating}★</span>}
                           </div>
                           <div className="small text-muted">
-                            {r.cuisine}{r.price ? ` · ${r.price}` : ""}{r.city ? ` · ${r.city}` : ""}
+                            {r.cuisine ? r.cuisine.charAt(0).toUpperCase() + r.cuisine.slice(1) : ""}{r.price ? ` · ${r.price}` : ""}{r.city ? ` · ${r.city}` : ""}
                           </div>
+                          {r.description && (
+                            <div className="small mt-1" style={{ color: "var(--text-secondary, #555)" }}>
+                              {r.description}
+                            </div>
+                          )}
                         </Link>
                       ))}
                     </div>

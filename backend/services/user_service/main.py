@@ -210,6 +210,8 @@ def get_history(user=Depends(get_current_user)):
         r.pop("_id", None)
         u = db.users.find_one({"_id": ObjectId(r["user_id"])})
         r["user_name"] = u["name"] if u else "User"
+        restaurant = db.restaurants.find_one({"_id": ObjectId(r["restaurant_id"])}) if r.get("restaurant_id") else None
+        r["restaurant_name"] = restaurant["name"] if restaurant else None
 
     restaurants_added = list(db.restaurants.find({"created_by": user["id"]}).sort("created_at", -1))
     for rest in restaurants_added:

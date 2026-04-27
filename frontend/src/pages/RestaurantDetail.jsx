@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { api, restaurantApi } from "../api/axios";
 import { selectUser } from "../store/slices/authSlice";
 import { fetchRestaurantDetail, selectRestaurantDetail } from "../store/slices/restaurantSlice";
 import { fetchReviews, createReview, updateReview, deleteReview, selectReviews } from "../store/slices/reviewSlice";
-import { addFavourite } from "../store/slices/favouriteSlice";
+import { addFavourite, removeFavourite, fetchFavourites, selectFavourites } from "../store/slices/favouriteSlice";
+
+const IS_DOCKER = import.meta.env.VITE_DOCKER === "true";
+const UPLOADS_BASE = IS_DOCKER ? "" : "http://localhost:8001";
 
 function titleCase(str) {
   if (!str) return "";
@@ -18,7 +21,12 @@ export default function RestaurantDetail() {
   const user = useSelector(selectUser);
   const restaurant = useSelector(selectRestaurantDetail);
   const reviews = useSelector(selectReviews);
+  const favourites = useSelector(selectFavourites);
+  const isFavourited = favourites.some((f) => f.restaurant_id === id);
   const [message, setMessage] = useState("");
+  const [hoveredPhoto, setHoveredPhoto] = useState(null);
+  const [hoverCover, setHoverCover] = useState(false);
+  const coverInputRef = useRef(null);
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState("");
   const [editingReviewId, setEditingReviewId] = useState(null);
@@ -28,11 +36,25 @@ export default function RestaurantDetail() {
   useEffect(() => {
     dispatch(fetchRestaurantDetail(id));
     dispatch(fetchReviews(id));
-  }, [id]);
+    if (user) dispatch(fetchFavourites());
+  }, [id, user]);
 
   function getPhotos() {
     if (!restaurant || !restaurant.photos) return [];
     return restaurant.photos.split(",").map((p) => p.trim()).filter(Boolean);
+  }
+
+  async function handleCoverUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      await restaurantApi.post(`/restaurants/${id}/cover`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      dispatch(fetchRestaurantDetail(id));
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "Error uploading cover image");
+    }
   }
 
   async function handlePhotoUpload(e) {
@@ -46,6 +68,15 @@ export default function RestaurantDetail() {
       dispatch(fetchRestaurantDetail(id));
     } catch (err) {
       setMessage(err.response?.data?.detail || "Error uploading photo");
+    }
+  }
+
+  async function deletePhoto(photoUrl) {
+    try {
+      await restaurantApi.delete(`/restaurants/${id}/photos`, { data: { photo_url: photoUrl } });
+      dispatch(fetchRestaurantDetail(id));
+    } catch (err) {
+      setMessage(err.response?.data?.detail || "Error deleting photo");
     }
   }
 
@@ -83,21 +114,51 @@ export default function RestaurantDetail() {
     dispatch(fetchRestaurantDetail(id));
   }
 
-  async function addToFavourites() {
+  async function toggleFavourite() {
     try {
-      await dispatch(addFavourite(id)).unwrap();
-      setMessage("Added to favourites!");
+      if (isFavourited) {
+        await dispatch(removeFavourite(id)).unwrap();
+      } else {
+        await dispatch(addFavourite(id)).unwrap();
+      }
     } catch (err) {
-      setMessage(err.message || "Error adding to favourites");
+      setMessage(err.message || "Error updating favourites");
     }
   }
 
   if (!restaurant) return <p>Loading...</p>;
   const photos = getPhotos();
+  const isOwner = user && (user.id === restaurant.owner_id || user.id === restaurant.created_by);
+  const firstPhoto = photos[0] || null;
+  const coverSrc = restaurant.cover_image
+    ? `${UPLOADS_BASE}${restaurant.cover_image}`
+    : firstPhoto
+      ? `${UPLOADS_BASE}${firstPhoto}`
+      : null;
 
   return (
     <div>
       <div className="card card-clean mb-4">
+        {(coverSrc || isOwner) && (
+          <div
+            onMouseEnter={() => setHoverCover(true)}
+            onMouseLeave={() => setHoverCover(false)}
+            style={{ position: "relative", height: 200, background: "var(--border)", borderRadius: "12px 12px 0 0", overflow: "hidden", cursor: isOwner ? "pointer" : "default" }}
+            onClick={() => isOwner && coverInputRef.current?.click()}
+          >
+            {coverSrc
+              ? <img src={coverSrc} alt={restaurant.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary, #aaa)", fontSize: "0.9rem" }}>No cover photo</div>
+            }
+            {isOwner && hoverCover && (
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <span style={{ color: "#fff", fontSize: "1.1rem" }}>📷</span>
+                <span style={{ color: "#fff", fontSize: "0.9rem", fontWeight: 500 }}>Change cover photo</span>
+              </div>
+            )}
+            <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverUpload} />
+          </div>
+        )}
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-start">
             <div>
@@ -123,7 +184,15 @@ export default function RestaurantDetail() {
             <div className="text-end">
               {restaurant.avg_rating && <span className="badge badge-soft fs-5">{restaurant.avg_rating} ★</span>}
               <p className="small text-muted">{restaurant.review_count} reviews</p>
-              {user && <button className="btn btn-sm btn-soft" onClick={addToFavourites}>❤️ Favourite</button>}
+              {user && (
+                <button
+                  className={`btn btn-sm ${isFavourited ? "btn-danger" : "btn-soft"}`}
+                  onClick={toggleFavourite}
+                  style={{ transition: "all 0.15s" }}
+                >
+                  {isFavourited ? "❤️ Saved" : "🤍 Save"}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -147,8 +216,27 @@ export default function RestaurantDetail() {
           ) : (
             <div className="d-flex flex-wrap gap-2">
               {photos.map((photoUrl, index) => (
-                <img key={index} src={`http://localhost:8006${photoUrl}`} alt={`${restaurant.name} photo ${index + 1}`}
-                  style={{ width: 180, height: 140, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }} />
+                  <div key={index} style={{ position: "relative", display: "inline-block" }}
+                    onMouseEnter={() => setHoveredPhoto(index)}
+                    onMouseLeave={() => setHoveredPhoto(null)}
+                  >
+                    <img src={`${UPLOADS_BASE}${photoUrl}`} alt={`${restaurant.name} photo ${index + 1}`}
+                      style={{ width: 180, height: 140, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)", display: "block" }} />
+                    {user && hoveredPhoto === index && (
+                      <button
+                        onClick={() => deletePhoto(photoUrl)}
+                        style={{
+                          position: "absolute", top: 6, right: 6,
+                          background: "rgba(0,0,0,0.6)", color: "#fff",
+                          border: "none", borderRadius: "50%",
+                          width: 26, height: 26, cursor: "pointer",
+                          fontSize: "0.85rem", lineHeight: 1,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}
+                        title="Delete photo"
+                      >✕</button>
+                    )}
+                  </div>
               ))}
             </div>
           )}
