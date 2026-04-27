@@ -11,6 +11,7 @@ from services.user_service.main import app as user_app
 from services.restaurant_service.main import app as restaurant_app
 from services.review_service.main import app as review_app
 from services.favourites_service.main import app as favourites_app
+from services.owner_service.main import app as owner_app
 
 gateway = FastAPI(title="Yelp API Gateway")
 
@@ -28,6 +29,7 @@ gateway.mount("/api/users", user_app)
 gateway.mount("/api/reviews", review_app)
 gateway.mount("/api/favourites", favourites_app)
 gateway.mount("/api/restaurants", restaurant_app)
+gateway.mount("/api/owner", owner_app)
 
 
 @gateway.get("/")
