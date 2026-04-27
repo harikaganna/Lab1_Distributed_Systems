@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from shared.database import get_db
 from shared.auth import get_current_user
 from shared.kafka_producer import publish_event
+from shared.activity_logger import log_activity
 
 app = FastAPI(title="Review Service")
 
@@ -77,6 +78,8 @@ def create_review(restaurant_id: str, payload: ReviewCreate, user=Depends(get_cu
         "rating": payload.rating,
         "comment": payload.comment,
     })
+    log_activity("review_created", "review", str(result.inserted_id), user["id"],
+                 {"restaurant_id": restaurant_id, "rating": payload.rating})
 
     return serialize_review(db, review_data)
 
