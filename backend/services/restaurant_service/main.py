@@ -57,6 +57,9 @@ class RestaurantUpdate(BaseModel):
     photos: Optional[str] = None
     amenities: Optional[str] = None
 
+class PhotoDeleteRequest(BaseModel):
+    photo_url: str
+
 
 def serialize_restaurant(db, rest):
     rest["id"] = str(rest["_id"])
@@ -193,6 +196,50 @@ async def upload_restaurant_photo(restaurant_id: str, file: UploadFile = File(..
     existing = rest.get("photos", "")
     new_photos = f"{existing},{photo_url}" if existing else photo_url
     db.restaurants.update_one({"_id": ObjectId(restaurant_id)}, {"$set": {"photos": new_photos}})
+    updated = db.restaurants.find_one({"_id": ObjectId(restaurant_id)})
+    return serialize_restaurant(db, updated)
+
+
+@app.post("/restaurants/{restaurant_id}/cover")
+async def upload_cover_image(restaurant_id: str, file: UploadFile = File(...), user=Depends(get_current_user)):
+    db = get_db()
+    rest = db.restaurants.find_one({"_id": ObjectId(restaurant_id)})
+    if not rest:
+        raise HTTPException(404, "Restaurant not found")
+    if rest.get("owner_id") != user["id"] and rest.get("created_by") != user["id"]:
+        raise HTTPException(403, "Only the restaurant owner can set the cover image")
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    filename = f"cover_{restaurant_id[:8]}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(await file.read())
+    old_cover = rest.get("cover_image")
+    if old_cover:
+        old_path = os.path.join(UPLOAD_DIR, os.path.basename(old_cover))
+        if os.path.exists(old_path):
+            os.remove(old_path)
+    db.restaurants.update_one({"_id": ObjectId(restaurant_id)}, {"$set": {"cover_image": f"/uploads/{filename}"}})
+    updated = db.restaurants.find_one({"_id": ObjectId(restaurant_id)})
+    return serialize_restaurant(db, updated)
+
+
+@app.delete("/restaurants/{restaurant_id}/photos")
+def delete_restaurant_photo(restaurant_id: str, payload: PhotoDeleteRequest, user=Depends(get_current_user)):
+    db = get_db()
+    rest = db.restaurants.find_one({"_id": ObjectId(restaurant_id)})
+    if not rest:
+        raise HTTPException(404, "Restaurant not found")
+    if not user:
+        raise HTTPException(403, "Must be logged in to delete photos")
+    existing = [p.strip() for p in (rest.get("photos") or "").split(",") if p.strip()]
+    if payload.photo_url not in existing:
+        raise HTTPException(404, "Photo not found")
+    existing.remove(payload.photo_url)
+    db.restaurants.update_one({"_id": ObjectId(restaurant_id)}, {"$set": {"photos": ",".join(existing)}})
+    filename = os.path.basename(payload.photo_url)
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    if os.path.exists(filepath):
+        os.remove(filepath)
     updated = db.restaurants.find_one({"_id": ObjectId(restaurant_id)})
     return serialize_restaurant(db, updated)
 

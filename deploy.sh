@@ -19,22 +19,26 @@ cd "$(dirname "$0")"
 
 for svc in user restaurant review favourites; do
   echo "  Building $svc-service..."
-  docker build -t $ECR_URL/yelp/$svc-service:latest -f backend/Dockerfile.$svc backend/
+  docker build --platform linux/amd64 -t $ECR_URL/yelp/$svc-service:latest -f backend/Dockerfile.$svc backend/
   docker push $ECR_URL/yelp/$svc-service:latest
 done
 
 for w in review-worker restaurant-worker user-worker; do
   echo "  Building $w..."
-  docker build -t $ECR_URL/yelp/$w:latest -f backend/Dockerfile.$w backend/
+  docker build --platform linux/amd64 -t $ECR_URL/yelp/$w:latest -f backend/Dockerfile.$w backend/
   docker push $ECR_URL/yelp/$w:latest
 done
 
 echo "  Building seed..."
-docker build -t $ECR_URL/yelp/seed:latest -f backend/Dockerfile.seed backend/
+docker build --platform linux/amd64 -t $ECR_URL/yelp/seed:latest -f backend/Dockerfile.seed backend/
 docker push $ECR_URL/yelp/seed:latest
 
+echo "  Building ai-service..."
+docker build --platform linux/amd64 -t $ECR_URL/yelp/ai-service:latest -f backend/Dockerfile.ai backend/
+docker push $ECR_URL/yelp/ai-service:latest
+
 echo "  Building frontend..."
-docker build -t $ECR_URL/yelp/frontend:latest frontend/
+docker build --platform linux/amd64 -t $ECR_URL/yelp/frontend:latest frontend/
 docker push $ECR_URL/yelp/frontend:latest
 
 # 3. Update K8s manifests with ECR URLs and apply
@@ -64,7 +68,9 @@ kubectl apply -f "$TMPDIR/user-service.yaml"
 kubectl apply -f "$TMPDIR/restaurant-service.yaml"
 kubectl apply -f "$TMPDIR/review-service.yaml"
 kubectl apply -f "$TMPDIR/favourites-service.yaml"
+kubectl apply -f "$TMPDIR/uploads-pvc.yaml"
 kubectl apply -f "$TMPDIR/workers.yaml"
+kubectl apply -f "$TMPDIR/ai-service.yaml"
 kubectl apply -f "$TMPDIR/frontend.yaml"
 
 rm -rf "$TMPDIR"

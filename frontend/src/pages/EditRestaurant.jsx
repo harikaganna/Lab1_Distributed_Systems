@@ -60,7 +60,7 @@ export default function EditRestaurant() {
                 <div className="col-md-6"><label className="form-label">Name</label><input className="form-control" value={form.name} onChange={updateField("name")} required /></div>
                 <div className="col-md-3"><label className="form-label">Cuisine</label>
                   <select className="form-select" value={form.cuisine_type} onChange={updateField("cuisine_type")}>
-                    {CUISINES.map((c) => (<option key={c} value={c}>{c}</option>))}
+                    {CUISINES.map((c) => (<option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>))}
                   </select>
                 </div>
                 <div className="col-md-3"><label className="form-label">City</label><input className="form-control" value={form.city} onChange={updateField("city")} required /></div>

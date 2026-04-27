@@ -1,10 +1,14 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
+const IS_DOCKER = import.meta.env.VITE_DOCKER === "true";
+const UPLOADS_BASE = IS_DOCKER ? "" : "http://localhost:8001";
+
 function getImageUrl(restaurant) {
+  if (restaurant.cover_image) return `${UPLOADS_BASE}${restaurant.cover_image}`;
   if (restaurant.photos) {
     const first = restaurant.photos.split(",")[0].trim();
-    if (first) return `http://localhost:7102${first}`;
+    if (first) return `${UPLOADS_BASE}${first}`;
   }
   return "/restaurant-placeholder.png";
 }

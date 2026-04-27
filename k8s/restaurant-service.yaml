@@ -4,7 +4,7 @@ metadata:
   name: restaurant-service
   namespace: yelp
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: restaurant-service
@@ -12,7 +12,15 @@ spec:
     metadata:
       labels:
         app: restaurant-service
+        uploads-group: shared
     spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  uploads-group: shared
+              topologyKey: kubernetes.io/hostname
       containers:
         - name: restaurant-service
           image: REPLACE_ECR_URL/yelp/restaurant-service:latest
@@ -27,6 +35,13 @@ spec:
                 secretKeyRef:
                   name: yelp-secret
                   key: SECRET_KEY
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: uploads-pvc
 ---
 apiVersion: v1
 kind: Service

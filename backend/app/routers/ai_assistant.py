@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from langchain_community.chat_models import ChatOllama
@@ -9,12 +10,14 @@ from ..auth import get_current_user
 
 router = APIRouter(prefix="/ai-assistant", tags=["AI Assistant"])
 
-CHAT_MODEL = "phi3:mini"
+CHAT_MODEL = "llama3.1:latest"
+STOP_WORDS = {"a", "an", "the", "and", "or", "for", "to", "in", "at", "of", "me",
+              "good", "great", "best", "find", "recommend", "want", "like", "near",
+              "restaurant", "restaurants", "food", "place", "places", "some", "any",
+              "i", "can", "you", "with", "get", "give", "show", "tonight", "today"}
 
-# using ollama locally so we dont need an openai key
-llm = ChatOllama(model=CHAT_MODEL, base_url="http://localhost:11434", temperature=0.7)
+llm = ChatOllama(model=CHAT_MODEL, base_url="http://localhost:11434", temperature=0.7, num_predict=120)
 
-# tavily for web search enrichment (optional, needs api key)
 tavily_search = None
 if settings.TAVILY_API_KEY:
     try:
@@ -24,8 +27,22 @@ if settings.TAVILY_API_KEY:
         pass
 
 
-def build_system_prompt(preferences, restaurants, web_context=""):
-    # put together the system prompt with user prefs + restaurant list
+def select_candidates(query: str, restaurants, top_n=3) -> list:
+    keywords = [w for w in query.lower().split() if w not in STOP_WORDS and len(w) > 2]
+    scored = []
+    for r in restaurants:
+        text = " ".join([
+            r.name, r.cuisine_type or "", r.description or "",
+            r.city or "", r.ambiance or "",
+        ]).lower()
+        score = sum(text.count(kw) for kw in keywords)
+        if score > 0:
+            scored.append((score, r.avg_rating or 0, r))
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return [r for _, _, r in scored[:top_n]]
+
+
+def build_system_prompt(preferences, candidates, web_context=""):
     pref_text = "No preferences saved."
     if preferences:
         parts = []
@@ -42,36 +59,62 @@ def build_system_prompt(preferences, restaurants, web_context=""):
         if parts:
             pref_text = "; ".join(parts)
 
-    restaurant_text = "No restaurants in database."
-    if restaurants:
-        lines = []
-        for r in restaurants:
-            rating = f"{r.avg_rating}★" if r.avg_rating else "No ratings"
-            price = r.price_range or "N/A"
-            desc = r.description or "No description"
-            lines.append(f"- ID:{r.id} {r.name} ({r.cuisine_type}, {price}, {rating}, {r.city}): {desc}")
+    if candidates:
+        lines = [f"- {r.name}: {r.description or r.cuisine_type}" for r in candidates]
         restaurant_text = "\n".join(lines)
+    else:
+        restaurant_text = "None"
 
-    web_section = ""
-    if web_context:
-        web_section = f"\n\nAdditional web context (from Tavily search):\n{web_context}"
+    return f"""You are a restaurant recommendation assistant. Restaurant cards with full details are shown to the user separately — do NOT repeat prices, ratings, cuisines, or locations.
 
-    return f"""You are a helpful restaurant recommendation assistant for a Yelp-like app.
 User preferences: {pref_text}
+Matching restaurants:
+{restaurant_text}
 
-Available restaurants:
-{restaurant_text}{web_section}
+Write 1-3 plain sentences (no lists, no bullet points, no bold, no formatting) explaining why these restaurants suit the user's request. Name each restaurant once. Nothing else."""
 
-Instructions:
-- Recommend restaurants from the list above based on the user's query and preferences.
-- Be conversational and explain why each recommendation matches.
-- Always mention the restaurant name, cuisine, price range, and rating.
-- If nothing matches well, say so honestly and suggest alternatives.
-- Keep responses concise (3-5 sentences per recommendation)."""
+
+FILLER_STARTS = (
+    "here are", "i've", "i have", "based on", "these are", "these places",
+    "these recommendations", "they also", "all of", "let me", "sure", "great",
+    "of course", "below are", "the following",
+)
+
+def truncate_reply(text: str, candidate_names: list[str], max_sentences: int = 3) -> str:
+    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r'\*+', '', text)
+    text = re.sub(r'#+\s*', '', text)
+    text = re.sub(r'-\s+', '', text)
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+
+    all_sentences = re.split(r'(?<=[.!?])\s+', text)
+    names_lower = [n.lower() for n in candidate_names]
+
+    # Prefer sentences that mention a restaurant; fall back to any non-filler sentence
+    restaurant_sentences = [
+        s for s in all_sentences
+        if any(name in s.lower() for name in names_lower)
+    ]
+    if restaurant_sentences:
+        return " ".join(restaurant_sentences[:max_sentences])
+
+    non_filler = [
+        s for s in all_sentences
+        if not s.lower().startswith(FILLER_STARTS)
+    ]
+    return " ".join((non_filler or all_sentences)[:max_sentences])
+
+
+def extract_description(reply: str, restaurant_name: str) -> str:
+    sentences = re.split(r'(?<=[.!?])\s+', reply)
+    name_lower = restaurant_name.lower()
+    for sentence in sentences:
+        if name_lower in sentence.lower():
+            return sentence.strip()
+    return ""
 
 
 def tavily_enrich(query: str) -> str:
-    # try to get some extra context from the web using tavily
     if not tavily_search:
         return ""
     try:
@@ -91,16 +134,13 @@ def chat(
     user: models.User = Depends(get_current_user),
 ):
     try:
-        # grab user prefs and all restaurants from db
         preferences = crud.get_preferences(db, user.id)
         all_restaurants = crud.list_restaurants(db, 0, 200)
+        candidates = select_candidates(payload.message, all_restaurants)
 
-        # see if tavily can give us anything useful
         web_context = tavily_enrich(payload.message)
+        system_prompt = build_system_prompt(preferences, candidates, web_context)
 
-        system_prompt = build_system_prompt(preferences, all_restaurants, web_context)
-
-        # build up the conversation for langchain
         messages = [SystemMessage(content=system_prompt)]
         for msg in (payload.conversation_history or []):
             role = msg.get("role")
@@ -110,27 +150,25 @@ def chat(
                 messages.append(AIMessage(content=msg["content"]))
         messages.append(HumanMessage(content=payload.message))
 
-        # send to ollama via langchain
         response = llm.invoke(messages)
-        reply = response.content
+        reply = truncate_reply(response.content, [r.name for r in candidates])
 
-        # check which restaurants got mentioned so we can show cards
-        recommendations = []
-        for restaurant in all_restaurants:
-            if restaurant.name.lower() in reply.lower():
-                recommendations.append({
-                    "id": restaurant.id,
-                    "name": restaurant.name,
-                    "cuisine": restaurant.cuisine_type,
-                    "rating": restaurant.avg_rating,
-                    "price": restaurant.price_range,
-                    "city": restaurant.city,
-                })
+        recommendations = [
+            {
+                "id": r.id,
+                "name": r.name,
+                "cuisine": r.cuisine_type,
+                "rating": r.avg_rating,
+                "price": r.price_range,
+                "city": r.city,
+                "description": extract_description(reply, r.name),
+            }
+            for r in candidates
+        ]
 
-        return {"response": reply, "recommendations": recommendations[:5]}
+        return {"response": reply, "recommendations": recommendations}
 
     except Exception as e:
-        # fallback if ollama isn't running
         error_str = str(e).lower()
         if "connection" in error_str or "refused" in error_str:
             return keyword_fallback(db, user, payload.message)
@@ -141,7 +179,6 @@ def chat(
 
 
 def keyword_fallback(db: Session, user: models.User, message: str):
-    # basic keyword matching when the llm is down
     keywords = message.lower().split()
     all_restaurants = crud.list_restaurants(db, 0, 200)
 
@@ -160,12 +197,13 @@ def keyword_fallback(db: Session, user: models.User, message: str):
                 "rating": restaurant.avg_rating,
                 "price": restaurant.price_range,
                 "city": restaurant.city,
+                "description": "",
             })
 
     if matches:
-        names = ", ".join(m["name"] for m in matches[:5])
-        response_text = f"Based on your query, I found these restaurants: {names}. Would you like more details on any of them?"
+        names = ", ".join(m["name"] for m in matches[:3])
+        response_text = f"Based on your query, here are some matches: {names}. Would you like more details on any of them?"
     else:
         response_text = "I couldn't find restaurants matching your query. Try searching by cuisine type or city name."
 
-    return {"response": response_text, "recommendations": matches[:5]}
+    return {"response": response_text, "recommendations": matches[:3]}
