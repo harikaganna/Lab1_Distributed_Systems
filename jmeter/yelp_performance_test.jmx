@@ -105,7 +105,7 @@
           </elementProp>
           <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
           <stringProp name="HTTPSampler.port">${REVIEW_PORT}</stringProp>
-          <stringProp name="HTTPSampler.path">/restaurants/1/reviews</stringProp>
+          <stringProp name="HTTPSampler.path">/restaurants/69ee54b3e4d258d746f08651/reviews</stringProp>
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
