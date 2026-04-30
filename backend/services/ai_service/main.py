@@ -3,12 +3,11 @@ import re
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from groq import Groq
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-from langchain_community.chat_models import ChatOllama
-from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from shared.database import get_db
 from shared.auth import get_current_user
 
@@ -19,8 +18,8 @@ app.add_middleware(
     allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 STOP_WORDS = {"a", "an", "the", "and", "or", "for", "to", "in", "at", "of", "me",
               "good", "great", "best", "find", "recommend", "want", "like", "near",
@@ -153,10 +152,8 @@ def keyword_fallback(message: str, restaurants: list, db) -> dict:
                 "description": "",
             })
 
-
     if matches:
         names = ", ".join(m["name"] for m in matches[:3])
-    # no keyword matches — return top-rated restaurants as a general suggestion
     if not matches:
         all_rated = []
         for r in restaurants:
@@ -180,24 +177,32 @@ def keyword_fallback(message: str, restaurants: list, db) -> dict:
 
 @app.post("/ai-assistant/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, user=Depends(get_current_user)):
+    if not GROQ_API_KEY:
+        db = get_db()
+        restaurants = get_restaurants(db)
+        return keyword_fallback(payload.message, restaurants, db)
+
     db = get_db()
     restaurants = get_restaurants(db)
     candidates = find_relevant_restaurants(payload.message, restaurants, db)
 
     try:
-        llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL, temperature=0.7, num_predict=120)
+        client = Groq(api_key=GROQ_API_KEY)
         system_prompt = build_system_prompt(candidates)
 
-        messages = [SystemMessage(content=system_prompt)]
+        messages = []
         for msg in (payload.conversation_history or []):
-            if msg.get("role") == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-            elif msg.get("role") == "assistant":
-                messages.append(AIMessage(content=msg["content"]))
-        messages.append(HumanMessage(content=payload.message))
+            if msg.get("role") in ("user", "assistant"):
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": payload.message})
 
-        response = llm.invoke(messages)
-        reply = truncate_reply(response.content, [r["name"] for r in candidates])
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "system", "content": system_prompt}] + messages,
+            max_tokens=200,
+            temperature=0.7,
+        )
+        reply = truncate_reply(response.choices[0].message.content, [r["name"] for r in candidates])
 
         for r in candidates:
             r["description"] = extract_description(reply, r["name"])
@@ -205,12 +210,10 @@ def chat(payload: ChatRequest, user=Depends(get_current_user)):
         return {"response": reply, "recommendations": candidates}
 
     except Exception as e:
-        error_str = str(e).lower()
-        if any(w in error_str for w in ["connection", "refused", "connect", "timeout"]):
-            return keyword_fallback(payload.message, restaurants, db)
-        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+        print(f"AI service error: {type(e).__name__}: {e}", flush=True)
+        return keyword_fallback(payload.message, restaurants, db)
 
 
 @app.get("/")
 def health():
-    return {"status": "ok", "service": "ai", "model": OLLAMA_MODEL, "ollama": OLLAMA_BASE_URL}
+    return {"status": "ok", "service": "ai", "model": GROQ_MODEL, "provider": "groq"}
