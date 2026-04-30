@@ -27,11 +27,10 @@ spec:
                 secretKeyRef:
                   name: yelp-secret
                   key: SECRET_KEY
-            - name: GROQ_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: yelp-secret
-                  key: GROQ_API_KEY
+            - name: OLLAMA_BASE_URL
+              value: "http://localhost:11434"
+            - name: OLLAMA_MODEL
+              value: "llama3.1:latest"
 ---
 apiVersion: v1
 kind: Service

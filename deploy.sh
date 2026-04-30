@@ -53,16 +53,6 @@ done
 
 kubectl apply -f "$TMPDIR/namespace.yaml"
 kubectl apply -f "$TMPDIR/config.yaml"
-
-# Apply secrets from the gitignored secrets.yaml (never committed to git)
-if [ -f "k8s/secrets.yaml" ]; then
-  kubectl apply -f "k8s/secrets.yaml"
-else
-  echo "ERROR: k8s/secrets.yaml not found."
-  echo "Copy k8s/secrets.yaml.example to k8s/secrets.yaml and fill in your keys."
-  exit 1
-fi
-
 kubectl apply -f "$TMPDIR/mongodb.yaml"
 kubectl apply -f "$TMPDIR/kafka.yaml"
 
