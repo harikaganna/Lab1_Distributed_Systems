@@ -9,12 +9,3 @@ data:
   KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
   ALGORITHM: "HS256"
   ACCESS_TOKEN_EXPIRE_MINUTES: "60"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: yelp-secret
-  namespace: yelp
-type: Opaque
-stringData:
-  SECRET_KEY: "supersecretkey123changeme"

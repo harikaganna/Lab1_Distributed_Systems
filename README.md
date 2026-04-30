@@ -10,7 +10,7 @@ Enhanced Yelp-style restaurant discovery platform with Docker, Kubernetes, Kafka
 - **Messaging:** Apache Kafka (producer/consumer pattern)
 - **Containerization:** Docker, Docker Compose
 - **Orchestration:** Kubernetes
-- **AI Assistant:** LangChain + Ollama (phi3:mini) + Tavily web search
+- **AI Assistant:** Groq API (llama-3.1-8b-instant) with keyword fallback
 - **Testing:** Apache JMeter
 
 ## Architecture
@@ -22,6 +22,7 @@ Enhanced Yelp-style restaurant discovery platform with Docker, Kubernetes, Kafka
 | Restaurant Service | 8002 | Restaurant CRUD, search, photos, claiming |
 | Review Service | 8003 | Review CRUD (Kafka producer) |
 | Favourites Service | 8004 | Favourites management |
+| AI Service | 8005 | Groq-powered restaurant recommendations |
 | Frontend | 3006 | React SPA |
 
 ### Kafka Topics (Producer → Consumer)
@@ -100,7 +101,27 @@ SECRET_KEY=your-secret-key
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 ```
 
-### Kubernetes Deployment
+### AWS EKS Deployment (Full Cloud)
+
+> Requires AWS CLI configured, `eksctl`, `kubectl`, and Docker Desktop running.
+
+**Spin up** (creates EKS cluster, builds and pushes all Docker images, deploys everything — ~20-25 min):
+```bash
+cd ..  # go up one level to Lab_2_2026/
+./spin_up_website_commands.sh
+```
+The script prints the frontend URL when the LoadBalancer is ready.
+
+**Shut down** (deletes the cluster and all running resources — ~10-15 min):
+```bash
+./shutdown_website.sh
+```
+
+> Note: ECR images persist after shutdown (negligible cost). Delete them from the AWS Console when no longer needed.
+
+---
+
+### Local Kubernetes Deployment
 ```bash
 # Apply all manifests
 kubectl apply -f k8s/namespace.yaml
